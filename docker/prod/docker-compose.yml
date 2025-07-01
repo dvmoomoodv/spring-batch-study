@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # MSSQL Server (소스 DB) - ARM64 호환
+  mssql-prod:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    platform: linux/arm64
+    container_name: mssql-prod
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=ProdPassword123!
+      - MSSQL_PID=Developer
+    ports:
+      - "1434:1433"
+    volumes:
+      - mssql_prod_data:/var/opt/mssql
+      - ./init-scripts/mssql:/docker-entrypoint-initdb.d
+    networks:
+      - batch-prod-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ProdPassword123! -Q 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MariaDB Master (타겟 DB - 운영환경 Master)
+  mariadb-master:
+    image: mariadb:11.2
+    platform: linux/arm64
+    container_name: mariadb-master
+    environment:
+      - MYSQL_ROOT_PASSWORD=ProdPassword123!
+      - MYSQL_DATABASE=targetDB
+      - MYSQL_USER=batch_user
+      - MYSQL_PASSWORD=BatchPassword123!
+      - MYSQL_REPLICATION_USER=repl_user
+      - MYSQL_REPLICATION_PASSWORD=ReplPassword123!
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb_master_data:/var/lib/mysql
+      - ./init-scripts/mariadb-master:/docker-entrypoint-initdb.d
+      - ./config/mariadb-master.cnf:/etc/mysql/conf.d/master.cnf
+    networks:
+      - batch-prod-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MariaDB Slave (타겟 DB - 운영환경 Slave)
+  mariadb-slave:
+    image: mariadb:11.2
+    platform: linux/arm64
+    container_name: mariadb-slave
+    environment:
+      - MYSQL_ROOT_PASSWORD=ProdPassword123!
+      - MYSQL_DATABASE=targetDB
+      - MYSQL_USER=batch_user
+      - MYSQL_PASSWORD=BatchPassword123!
+      - MYSQL_MASTER_HOST=mariadb-master
+      - MYSQL_MASTER_PORT=3306
+      - MYSQL_REPLICATION_USER=repl_user
+      - MYSQL_REPLICATION_PASSWORD=ReplPassword123!
+    ports:
+      - "3308:3306"
+    volumes:
+      - mariadb_slave_data:/var/lib/mysql
+      - ./init-scripts/mariadb-slave:/docker-entrypoint-initdb.d
+      - ./config/mariadb-slave.cnf:/etc/mysql/conf.d/slave.cnf
+    depends_on:
+      - mariadb-master
+    networks:
+      - batch-prod-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # phpMyAdmin (Master DB 관리용) - ARM64 호환
+  phpmyadmin-master:
+    image: arm64v8/phpmyadmin:latest
+    container_name: phpmyadmin-master
+    environment:
+      - PMA_HOST=mariadb-master
+      - PMA_USER=root
+      - PMA_PASSWORD=ProdPassword123!
+    ports:
+      - "8083:80"
+    depends_on:
+      - mariadb-master
+    networks:
+      - batch-prod-network
+
+  # phpMyAdmin (Slave DB 관리용) - ARM64 호환
+  phpmyadmin-slave:
+    image: arm64v8/phpmyadmin:latest
+    container_name: phpmyadmin-slave
+    environment:
+      - PMA_HOST=mariadb-slave
+      - PMA_USER=root
+      - PMA_PASSWORD=ProdPassword123!
+    ports:
+      - "8084:80"
+    depends_on:
+      - mariadb-slave
+    networks:
+      - batch-prod-network
+
+  # Adminer (MSSQL 관리용) - ARM64 호환
+  adminer-prod:
+    image: adminer:latest
+    container_name: adminer-prod
+    ports:
+      - "8085:8080"
+    networks:
+      - batch-prod-network
+
+volumes:
+  mssql_prod_data:
+  mariadb_master_data:
+  mariadb_slave_data:
+
+networks:
+  batch-prod-network:
+    driver: bridge

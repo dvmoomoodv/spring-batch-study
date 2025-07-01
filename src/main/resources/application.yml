@@ -1,0 +1,110 @@
+spring:
+  profiles:
+    active: dev
+  batch:
+    job:
+      enabled: false  # Job을 수동으로 실행하기 위해 자동 실행 비활성화
+    jdbc:
+      initialize-schema: always
+
+---
+# 개발 환경 설정
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    source:  # MSSQL 소스 DB
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      jdbc-url: jdbc:sqlserver://localhost:1433;databaseName=sourceDB;trustServerCertificate=true
+      username: sa
+      password: yourPassword
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 5
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+    target:  # MariaDB 타겟 DB (개발환경 - 단일 DB)
+      driver-class-name: org.mariadb.jdbc.Driver
+      jdbc-url: jdbc:mariadb://localhost:3306/targetDB
+      username: root
+      password: yourPassword
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 5
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+
+---
+# 운영 환경 설정
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    source:  # MSSQL 소스 DB
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      jdbc-url: jdbc:sqlserver://prod-mssql-server:1433;databaseName=sourceDB;trustServerCertificate=true
+      username: ${DB_SOURCE_USERNAME:sa}
+      password: ${DB_SOURCE_PASSWORD:password}
+      hikari:
+        maximum-pool-size: 20
+        minimum-idle: 10
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+    target:  # MariaDB 타겟 DB (운영환경 - Master)
+      driver-class-name: org.mariadb.jdbc.Driver
+      jdbc-url: jdbc:mariadb://prod-mariadb-master:3306/targetDB
+      username: ${DB_TARGET_USERNAME:root}
+      password: ${DB_TARGET_PASSWORD:password}
+      hikari:
+        maximum-pool-size: 20
+        minimum-idle: 10
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+    target-slave:  # MariaDB 슬레이브 DB (읽기 전용, 필요시 사용)
+      driver-class-name: org.mariadb.jdbc.Driver
+      jdbc-url: jdbc:mariadb://prod-mariadb-slave:3306/targetDB
+      username: ${DB_TARGET_SLAVE_USERNAME:root}
+      password: ${DB_TARGET_SLAVE_PASSWORD:password}
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 5
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+
+# 배치 설정
+batch:
+  chunk-size: 1000  # 기본 청크 사이즈 (조절 가능)
+  skip-limit: 100   # 오류 허용 개수
+  retry-limit: 3    # 재시도 횟수
+
+# 로깅 설정
+logging:
+  level:
+    com.example.batch: DEBUG
+    org.springframework.batch: INFO
+    org.springframework.jdbc: DEBUG
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+  file:
+    name: logs/batch-migration.log
+    max-size: 100MB
+    max-history: 30
+
+# 관리 및 모니터링
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,beans
+  endpoint:
+    health:
+      show-details: always

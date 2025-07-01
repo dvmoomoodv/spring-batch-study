@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # MSSQL Server (소스 DB) - ARM64 호환
+  mssql-dev:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    platform: linux/arm64
+    container_name: mssql-dev
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=DevPassword123!
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_dev_data:/var/opt/mssql
+      - ./init-scripts/mssql:/docker-entrypoint-initdb.d
+    networks:
+      - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P DevPassword123! -Q 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MariaDB (타겟 DB - 개발환경은 단일 DB)
+  mariadb-dev:
+    image: mariadb:11.2
+    platform: linux/arm64
+    container_name: mariadb-dev
+    environment:
+      - MYSQL_ROOT_PASSWORD=DevPassword123!
+      - MYSQL_DATABASE=targetDB
+      - MYSQL_USER=batch_user
+      - MYSQL_PASSWORD=BatchPassword123!
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_dev_data:/var/lib/mysql
+      - ./init-scripts/mariadb:/docker-entrypoint-initdb.d
+    networks:
+      - batch-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # phpMyAdmin (MariaDB 관리용) - ARM64 호환
+  phpmyadmin:
+    image: arm64v8/phpmyadmin:latest
+    container_name: phpmyadmin-dev
+    environment:
+      - PMA_HOST=mariadb-dev
+      - PMA_USER=root
+      - PMA_PASSWORD=DevPassword123!
+    ports:
+      - "8081:80"
+    depends_on:
+      - mariadb-dev
+    networks:
+      - batch-network
+
+  # SQL Server Management Studio 대안 (Adminer) - ARM64 호환
+  adminer:
+    image: adminer:latest
+    container_name: adminer-dev
+    ports:
+      - "8082:8080"
+    networks:
+      - batch-network
+
+volumes:
+  mssql_dev_data:
+  mariadb_dev_data:
+
+networks:
+  batch-network:
+    driver: bridge
