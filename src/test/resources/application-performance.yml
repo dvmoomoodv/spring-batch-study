@@ -1,0 +1,100 @@
+# 성능 테스트 환경 설정
+spring:
+  profiles:
+    active: performance
+    
+  # 성능 테스트용 데이터소스 설정 (실제 DB 사용)
+  datasource:
+    source:
+      # Testcontainers에서 동적으로 설정됨
+      hikari:
+        maximum-pool-size: 50
+        minimum-idle: 10
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+        leak-detection-threshold: 60000
+        
+    target:
+      # Testcontainers에서 동적으로 설정됨
+      hikari:
+        maximum-pool-size: 100
+        minimum-idle: 20
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+
+  # JPA 설정 (성능 최적화)
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 1000
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+        generate_statistics: true
+
+  # Spring Batch 설정 (성능 최적화)
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
+      isolation-level-for-create: read_committed
+      
+  # 트랜잭션 설정
+  transaction:
+    default-timeout: 1800  # 30분
+
+# 로깅 설정 (성능 테스트용)
+logging:
+  level:
+    root: WARN
+    com.example.batch: INFO
+    org.springframework.batch: INFO
+    org.springframework.jdbc: WARN
+    org.testcontainers: WARN
+    
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"
+
+# 배치 설정 (성능 최적화)
+batch:
+  performance:
+    chunk-size: 5000
+    skip-limit: 1000
+    retry-limit: 3
+    thread-pool-size: 8
+    
+  timeout:
+    job-seconds: 3600  # 1시간
+    step-seconds: 1800  # 30분
+
+# 성능 테스트 설정
+performance:
+  test:
+    record-counts:
+      small: 10000
+      medium: 100000
+      large: 1000000
+      xlarge: 10000000
+      
+    chunk-sizes: [500, 1000, 2000, 5000, 10000]
+    
+    thresholds:
+      records-per-second-min: 1000
+      memory-usage-max-gb: 8
+      
+    concurrent:
+      max-threads: 10
+      domains: ["USER", "PRODUCT", "ORDER", "PAYMENT", "INVENTORY"]
+
+# JVM 설정 권장사항 (주석)
+# -Xms2g -Xmx8g
+# -XX:+UseG1GC
+# -XX:MaxGCPauseMillis=200
+# -XX:+HeapDumpOnOutOfMemoryError

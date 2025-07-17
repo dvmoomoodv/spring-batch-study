@@ -1,0 +1,97 @@
+# 테스트 환경 설정
+spring:
+  profiles:
+    active: test
+    
+  # 테스트용 데이터소스 설정 (H2 In-Memory)
+  datasource:
+    source:
+      url: jdbc:h2:mem:sourcedb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password: 
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 2
+        connection-timeout: 30000
+        
+    target:
+      url: jdbc:h2:mem:targetdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 2
+        connection-timeout: 30000
+
+  # H2 콘솔 활성화 (테스트 디버깅용)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+  # Spring Batch 설정
+  batch:
+    job:
+      enabled: false  # 테스트에서는 수동 실행
+    jdbc:
+      initialize-schema: always
+      table-prefix: BATCH_
+    
+  # 트랜잭션 설정
+  transaction:
+    default-timeout: 300
+
+# 로깅 설정
+logging:
+  level:
+    root: INFO
+    com.example.batch: DEBUG
+    org.springframework.batch: DEBUG
+    org.springframework.jdbc: DEBUG
+    org.springframework.transaction: DEBUG
+    org.testcontainers: INFO
+    
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level [%X{jobName}:%X{stepName}] %logger{36} - %msg%n"
+
+# 배치 설정
+batch:
+  default:
+    chunk-size: 100
+    skip-limit: 10
+    retry-limit: 3
+    
+  test:
+    timeout-seconds: 300
+    
+# 테스트 데이터 설정
+test:
+  data:
+    cleanup: true
+    generate-large-data: false
+    
+# Actuator 설정 (테스트 모니터링용)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,batch
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      simple:
+        enabled: true
